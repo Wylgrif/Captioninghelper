@@ -1,6 +1,7 @@
 import os
+import json
 import tkinter as tk
-from tkinter import simpledialog, messagebox, filedialog  # Importation correcte
+from tkinter import simpledialog, messagebox, filedialog
 from PIL import Image, ImageTk
 
 class ImageCaptioningApp:
@@ -11,26 +12,27 @@ class ImageCaptioningApp:
         self.current_index = 0
         self.tag_library = set()
 
-        # Initialiser l'interface utilisateur
+        self.tag_library_file = os.path.join(folder_path, "tag_library.json")
+
         self.setup_ui()
+
+        self.load_tag_library()
 
         if self.image_files:
             self.load_image()
+            self.update_progress_bar()
         else:
             messagebox.showerror("Erreur", "Aucune image trouvée dans le dossier spécifié.")
 
     def setup_ui(self):
         self.root.title("Application de Captionning d'Images")
 
-        # Affichage de l'image
         self.image_label = tk.Label(self.root)
         self.image_label.pack()
 
-        # Nom de l'image affichée
         self.image_name_label = tk.Label(self.root, text="", font=("Arial", 16))
         self.image_name_label.pack()
 
-        # Cadre pour la bibliothèque de tags
         self.tag_library_frame = tk.Frame(self.root)
         self.tag_library_frame.pack(pady=10)
 
@@ -44,8 +46,8 @@ class ImageCaptioningApp:
 
         tk.Button(buttons_frame, text="Ajouter un Tag", command=self.add_to_library).pack()
         tk.Button(buttons_frame, text="Supprimer un Tag", command=self.remove_from_library).pack()
+        tk.Button(buttons_frame, text="Sauvegarder la Bibliothèque", command=self.save_tag_library).pack()
 
-        # Tags associés à l'image
         self.image_tags_frame = tk.Frame(self.root)
         self.image_tags_frame.pack(pady=10)
 
@@ -55,7 +57,6 @@ class ImageCaptioningApp:
         self.image_tags_display = tk.Text(self.image_tags_frame, height=3, width=50)
         self.image_tags_display.pack()
 
-        # Navigation et actions
         actions_frame = tk.Frame(self.root)
         actions_frame.pack(pady=10)
 
@@ -65,8 +66,14 @@ class ImageCaptioningApp:
         tk.Button(actions_frame, text="Ajouter Tag (Temporaire)", command=self.add_temp_tag).pack(side=tk.LEFT, padx=5)
         tk.Button(actions_frame, text="Retirer Tag", command=self.remove_tag).pack(side=tk.LEFT, padx=5)
 
+        self.progress_label = tk.Label(self.root, text="", font=("Arial", 12))
+        self.progress_label.pack(pady=5)
+
+        self.progress_bar = tk.Canvas(self.root, height=20, width=300, bg="lightgrey")
+        self.progress_bar.pack()
+        self.progress_fill = None
+
     def load_image(self):
-        # Charger et afficher l'image courante
         image_path = os.path.join(self.folder_path, self.image_files[self.current_index])
         image = Image.open(image_path)
         image.thumbnail((600, 400))
@@ -76,11 +83,9 @@ class ImageCaptioningApp:
         self.image_label.image = photo
         self.image_name_label.config(text=os.path.basename(image_path))
 
-        # Charger les tags associés à l'image
         self.load_tags()
 
     def load_tags(self):
-        # Charger les tags depuis le fichier texte associé
         image_name = os.path.splitext(self.image_files[self.current_index])[0]
         tags_file = os.path.join(self.folder_path, f"{image_name}.txt")
 
@@ -94,7 +99,6 @@ class ImageCaptioningApp:
             self.image_tags_display.insert(tk.END, ", ".join(tags))
 
     def save_tags(self):
-        # Sauvegarder les tags associés à l'image dans un fichier texte
         image_name = os.path.splitext(self.image_files[self.current_index])[0]
         tags_file = os.path.join(self.folder_path, f"{image_name}.txt")
 
@@ -103,23 +107,51 @@ class ImageCaptioningApp:
 
         with open(tags_file, "w", encoding="utf-8") as f:
             f.write(", ".join(tags))
+        self.update_progress_bar()
+
+    def update_progress_bar(self):
+        file_list = os.listdir(self.folder_path)
+        txt_files = len([f for f in file_list if f.endswith(".txt")])
+        total_images = len(self.image_files)
+
+        progress = (txt_files / total_images) if total_images > 0 else 0
+        fill_width = int(300 * progress)
+
+        if self.progress_fill:
+            self.progress_bar.delete(self.progress_fill)
+        self.progress_fill = self.progress_bar.create_rectangle(0, 0, fill_width, 20, fill="green")
+
+        self.progress_label.config(text=f"Progression : {txt_files} / {total_images} images captionnées")
 
     def add_to_library(self):
-        # Ajouter un tag à la bibliothèque
         new_tag = simpledialog.askstring("Ajouter un Tag", "Entrez un nouveau tag :")
         if new_tag and new_tag not in self.tag_library:
             self.tag_library.add(new_tag)
             self.update_tag_library()
 
     def remove_from_library(self):
-        # Supprimer un tag de la bibliothèque
         selected_tag = self.tags_listbox.get(tk.ACTIVE)
         if selected_tag and selected_tag in self.tag_library:
             self.tag_library.remove(selected_tag)
             self.update_tag_library()
 
+    def save_tag_library(self):
+        with open(self.tag_library_file, "w", encoding="utf-8") as f:
+            json.dump(sorted(list(self.tag_library)), f, ensure_ascii=False, indent=4)
+        messagebox.showinfo("Succès", "Bibliothèque de tags sauvegardée automatiquement dans le dossier.")
+
+    def load_tag_library(self):
+        if os.path.exists(self.tag_library_file):
+            with open(self.tag_library_file, "r", encoding="utf-8") as f:
+                self.tag_library = set(json.load(f))
+            self.update_tag_library()
+
+    def update_tag_library(self):
+        self.tags_listbox.delete(0, tk.END)
+        for tag in sorted(self.tag_library):
+            self.tags_listbox.insert(tk.END, tag)
+
     def apply_tag(self):
-        # Appliquer un tag de la bibliothèque à l'image
         selected_tag = self.tags_listbox.get(tk.ACTIVE)
         if not selected_tag:
             messagebox.showerror("Erreur", "Veuillez sélectionner un tag.")
@@ -136,7 +168,6 @@ class ImageCaptioningApp:
         self.save_tags()
 
     def add_temp_tag(self):
-        # Ajouter un tag temporaire à l'image
         new_tag = simpledialog.askstring("Ajouter un Tag", "Entrez un tag temporaire :")
         if new_tag:
             tags_text = self.image_tags_display.get(1.0, tk.END).strip()
@@ -150,24 +181,17 @@ class ImageCaptioningApp:
             self.save_tags()
 
     def remove_tag(self):
-        # Retirer un tag de l'image
-        tag_to_remove = simpledialog.askstring("Retirer un Tag", "Entrez le tag à retirer :")
-        if tag_to_remove:
-            tags_text = self.image_tags_display.get(1.0, tk.END).strip()
-            tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()]
+        tags_text = self.image_tags_display.get(1.0, tk.END).strip()
+        tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()]
 
-            if tag_to_remove in tags:
+        if tags:
+            tag_to_remove = simpledialog.askstring("Retirer un Tag", "Entrez le tag à retirer :")
+            if tag_to_remove and tag_to_remove in tags:
                 tags.remove(tag_to_remove)
 
             self.image_tags_display.delete(1.0, tk.END)
             self.image_tags_display.insert(tk.END, ", ".join(tags))
             self.save_tags()
-
-    def update_tag_library(self):
-        # Mettre à jour l'affichage de la bibliothèque de tags
-        self.tags_listbox.delete(0, tk.END)
-        for tag in sorted(self.tag_library):
-            self.tags_listbox.insert(tk.END, tag)
 
     def prev_image(self):
         if self.current_index > 0:
@@ -179,9 +203,7 @@ class ImageCaptioningApp:
             self.current_index += 1
             self.load_image()
 
-
 if __name__ == "__main__":
-    # Spécifiez le dossier contenant les images
     folder_path = filedialog.askdirectory(title="Sélectionnez le dossier contenant les images")
     if folder_path:
         root = tk.Tk()
