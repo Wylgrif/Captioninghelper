@@ -46,7 +46,7 @@ class ImageCaptioningApp:
 
         tk.Button(buttons_frame, text="Ajouter un Tag", command=self.add_to_library).pack()
         tk.Button(buttons_frame, text="Supprimer un Tag", command=self.remove_from_library).pack()
-        tk.Button(buttons_frame, text="Sauvegarder la Bibliothèque", command=self.save_tag_library).pack()
+        
 
         self.image_tags_frame = tk.Frame(self.root)
         self.image_tags_frame.pack(pady=10)
