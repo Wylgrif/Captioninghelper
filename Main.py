@@ -116,8 +116,7 @@ class ImageCaptioningApp:
 
     def save_tags(self):
         # Ne pas sauvegarder les tags pour les images masquées
-        if self.image_files[self.current_index] in self.hidden_images:
-            return
+        
 
         image_name = os.path.splitext(self.image_files[self.current_index])[0]
         tags_file = os.path.join(self.folder_path, f"{image_name}.txt")
