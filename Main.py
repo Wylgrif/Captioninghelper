@@ -3,16 +3,30 @@ import json
 import tkinter as tk
 from tkinter import simpledialog, messagebox, filedialog
 from PIL import Image, ImageTk
+import random
 
 class ImageCaptioningApp:
     def __init__(self, root, folder_path):
         self.root = root
         self.folder_path = folder_path
-        self.image_files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f)) and f.lower().endswith(('png', 'jpg', 'jpeg'))]
-        self.current_index = 0
         self.tag_library = set()
+        self.hidden_images = set()
 
         self.tag_library_file = os.path.join(folder_path, "tag_library.json")
+        self.hidden_images_file = os.path.join(folder_path, "hidden_images.json")
+
+        # Charger les images masquées avant de charger la liste des images
+        self.load_hidden_images()
+
+        # Charger uniquement les images non masquées
+        self.image_files = [
+            f for f in os.listdir(folder_path)
+            if os.path.isfile(os.path.join(folder_path, f))
+            and f.lower().endswith(('png', 'jpg', 'jpeg'))
+            and f not in self.hidden_images  # Exclure les images masquées
+        ]
+
+        self.current_index = 0
 
         self.setup_ui()
 
@@ -62,9 +76,11 @@ class ImageCaptioningApp:
 
         tk.Button(actions_frame, text="Image Précédente", command=self.prev_image).pack(side=tk.LEFT, padx=5)
         tk.Button(actions_frame, text="Image Suivante", command=self.next_image).pack(side=tk.LEFT, padx=5)
+        tk.Button(actions_frame, text="Image Aléatoire", command=self.random_image).pack(side=tk.LEFT, padx=5)
         tk.Button(actions_frame, text="Appliquer Tag", command=self.apply_tag).pack(side=tk.LEFT, padx=5)
         tk.Button(actions_frame, text="Ajouter Tag (Temporaire)", command=self.add_temp_tag).pack(side=tk.LEFT, padx=5)
         tk.Button(actions_frame, text="Retirer Tag", command=self.remove_tag).pack(side=tk.LEFT, padx=5)
+        tk.Button(actions_frame, text="Masquer l'image", command=self.hide_image).pack(side=tk.LEFT, padx=5)
 
         self.progress_label = tk.Label(self.root, text="", font=("Arial", 12))
         self.progress_label.pack(pady=5)
@@ -99,6 +115,10 @@ class ImageCaptioningApp:
             self.image_tags_display.insert(tk.END, ", ".join(tags))
 
     def save_tags(self):
+        # Ne pas sauvegarder les tags pour les images masquées
+        if self.image_files[self.current_index] in self.hidden_images:
+            return
+
         image_name = os.path.splitext(self.image_files[self.current_index])[0]
         tags_file = os.path.join(self.folder_path, f"{image_name}.txt")
 
@@ -111,8 +131,12 @@ class ImageCaptioningApp:
 
     def update_progress_bar(self):
         file_list = os.listdir(self.folder_path)
-        txt_files = len([f for f in file_list if f.endswith(".txt")])
-        total_images = len(self.image_files)
+        txt_files = len([
+            f for f in file_list
+            if f.endswith(".txt")
+            # and os.path.splitext(f)[0] + ".jpg" not in self.hidden_images  Exclure les images masquées
+        ])
+        total_images = len(self.image_files)+len(self.hidden_images)
 
         progress = (txt_files / total_images) if total_images > 0 else 0
         fill_width = int(300 * progress)
@@ -202,6 +226,27 @@ class ImageCaptioningApp:
         if self.current_index < len(self.image_files) - 1:
             self.current_index += 1
             self.load_image()
+
+    def hide_image(self):
+        current_image = self.image_files[self.current_index]
+        if current_image not in self.hidden_images:
+            self.hidden_images.add(current_image)
+            self.save_hidden_images()
+            messagebox.showinfo("Succès", f"L'image {current_image} a été masquée.")
+            self.next_image()
+
+    def save_hidden_images(self):
+        with open(self.hidden_images_file, "w", encoding="utf-8") as f:
+            json.dump(list(self.hidden_images), f, ensure_ascii=False, indent=4)
+
+    def load_hidden_images(self):
+        if os.path.exists(self.hidden_images_file):
+            with open(self.hidden_images_file, "r", encoding="utf-8") as f:
+                self.hidden_images = set(json.load(f))
+
+    def random_image(self):
+        self.current_index = random.randint(0, len(self.image_files) - 1)
+        self.load_image()
 
 if __name__ == "__main__":
     folder_path = filedialog.askdirectory(title="Sélectionnez le dossier contenant les images")
