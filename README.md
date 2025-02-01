@@ -5,6 +5,5 @@ This project is a small script designed to help manual captioning of an image da
 You need python with this library to run this code
 ```
 pip install pillow
-
 ```
 You must have Ollama with Lava to use the autocaptioning feature.
