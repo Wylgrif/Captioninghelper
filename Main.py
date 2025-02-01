@@ -3,6 +3,7 @@ import json
 import tkinter as tk
 from tkinter import simpledialog, messagebox, filedialog
 from PIL import Image, ImageTk
+import subprocess
 import random
 
 class ImageCaptioningApp:
@@ -81,6 +82,7 @@ class ImageCaptioningApp:
         tk.Button(actions_frame, text="Ajouter Tag (Temporaire)", command=self.add_temp_tag).pack(side=tk.LEFT, padx=5)
         tk.Button(actions_frame, text="Retirer Tag", command=self.remove_tag).pack(side=tk.LEFT, padx=5)
         tk.Button(actions_frame, text="Masquer l'image", command=self.hide_image).pack(side=tk.LEFT, padx=5)
+        tk.Button(actions_frame, text="Envoyer à ollama", command=self.send_to_ollama).pack(side=tk.LEFT, padx=5)
 
         self.progress_label = tk.Label(self.root, text="", font=("Arial", 12))
         self.progress_label.pack(pady=5)
@@ -115,7 +117,10 @@ class ImageCaptioningApp:
             self.image_tags_display.insert(tk.END, ", ".join(tags))
 
     def save_tags(self):
-        
+        # Ne pas sauvegarder les tags pour les images masquées
+        if self.image_files[self.current_index] in self.hidden_images:
+            return
+
         image_name = os.path.splitext(self.image_files[self.current_index])[0]
         tags_file = os.path.join(self.folder_path, f"{image_name}.txt")
 
@@ -190,6 +195,10 @@ class ImageCaptioningApp:
 
     def add_temp_tag(self):
         new_tag = simpledialog.askstring("Ajouter un Tag", "Entrez un tag temporaire :")
+        self.add_tag_to_caption(new_tag)
+        
+        
+    def add_tag_to_caption(self, new_tag):
         if new_tag:
             tags_text = self.image_tags_display.get(1.0, tk.END).strip()
             tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()]
@@ -244,6 +253,32 @@ class ImageCaptioningApp:
     def random_image(self):
         self.current_index = random.randint(0, len(self.image_files) - 1)
         self.load_image()
+
+    def send_to_ollama(self):
+        image_path = os.path.join(self.folder_path, self.image_files[self.current_index])
+    
+    # Construct the command to send to Ollama
+        command = ["ollama", "run", "llava", image_path, " Describe this image as a training prompt, using short, precise terms separated by commas. You'll answer only with these descriptive terms."]
+    
+        try:
+            # Run the command and capture the output
+            result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+        
+        # Check if the command was successful
+            if result.returncode == 0:
+                # Extract the output from the result
+                output = result.stdout.strip()
+            
+            # Add the output as tags to the image
+                self.add_tag_to_caption(output)
+            else:
+                # Handle errors if the command failed
+                error_message = result.stderr.strip()
+                messagebox.showerror("Erreur", f"Ollama a renvoyé une erreur : {error_message}")
+    
+        except Exception as e:
+        # Handle any unexpected errors
+            messagebox.showerror("Erreur", f"Une erreur s'est produite : {str(e)}")
 
 if __name__ == "__main__":
     folder_path = filedialog.askdirectory(title="Sélectionnez le dossier contenant les images")
