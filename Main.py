@@ -8,6 +8,10 @@ from PIL import Image
 import subprocess
 import random
 
+# Ajoutez ces constantes au début du fichier, juste après les imports
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+LAST_FOLDER_FILE = os.path.join(SCRIPT_DIR, "last_folder.json")
+
 class ImageCaptioningApp(QMainWindow):
     def __init__(self, folder_path):
         super().__init__()
@@ -17,6 +21,9 @@ class ImageCaptioningApp(QMainWindow):
 
         self.tag_library_file = os.path.join(folder_path, "tag_library.json")
         self.hidden_images_file = os.path.join(folder_path, "hidden_images.json")
+
+        self.save_last_folder(folder_path)
+
 
         # Load hidden images before loading the image list
         self.load_hidden_images()
@@ -317,9 +324,28 @@ class ImageCaptioningApp(QMainWindow):
             # Handle any unexpected errors
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
+    def save_last_folder(self, folder_path):
+        with open(LAST_FOLDER_FILE, 'w') as f:
+            json.dump({"last_folder": folder_path}, f)
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    folder_path = QFileDialog.getExistingDirectory(None, "Select the folder containing images")
+
+    # Fonction pour charger le dernier dossier utilisé
+    def load_last_folder():
+        if os.path.exists(LAST_FOLDER_FILE):
+            with open(LAST_FOLDER_FILE, 'r') as f:
+                data = json.load(f)
+                return data.get("last_folder", "")
+        return ""
+
+    # Charger le dernier dossier utilisé
+    last_folder = load_last_folder()
+
+    # Utiliser le dernier dossier comme point de départ pour la boîte de dialogue
+    folder_path = QFileDialog.getExistingDirectory(None, "Select the folder containing images", last_folder)
+
     if folder_path:
         window = ImageCaptioningApp(folder_path)
         window.show()
