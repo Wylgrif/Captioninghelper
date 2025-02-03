@@ -1,0 +1,7 @@
+1.Ajouter paramètres:
+  - Changer de langue
+  - utilisationde de l'api OpenAi pour Auto captionner des images
+  - selectionner le model de captionneur d'image
+2.Ajouter un bouton pour traduire tout les images en .jpg
+3.Ajouter un bouton pour vider les fichiers .txt vides
+4.Ajouter une animation lors du catptionnage automatique
