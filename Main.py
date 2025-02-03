@@ -7,6 +7,7 @@ from PyQt5.QtCore import Qt
 from PIL import Image
 import subprocess
 import random
+import platform
 
 # Ajoutez ces constantes au début du fichier, juste après les imports
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -306,7 +307,10 @@ class ImageCaptioningApp(QMainWindow):
     
         try:
             # Run the command and capture the output
-            result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+            if platform.system() == "Windows":
+                result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", creationflags=subprocess.CREATE_NO_WINDOW)
+            else:
+                result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", stderr=subprocess.DEVNULL)
         
             # Check if the command was successful
             if result.returncode == 0:
