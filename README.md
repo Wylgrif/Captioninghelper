@@ -1,7 +1,7 @@
 This project is a small script designed to help manual captioning of an image database. It requires python and Pillow if you use source code.
 
 ## Installation
-First, fit clone this repo
+First, clone this repo
 ```
 git clone https://github.com/Wylgrif/Captioninghelper
 ```
