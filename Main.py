@@ -26,7 +26,6 @@ class ImageCaptioningApp(QMainWindow):
         self.hidden_images_file = os.path.join(folder_path, "hidden_images.json")
 
         self.save_last_folder(folder_path)
-
         # Chargez la configuration ici
         self.config = self.load_config()
 
@@ -98,9 +97,9 @@ class ImageCaptioningApp(QMainWindow):
         remove_tag_button.clicked.connect(self.remove_from_library)
         tag_buttons_layout.addWidget(remove_tag_button)
 
-        turn_png_into_jpg_button = QPushButton("Turn png into jpg")
-        turn_png_into_jpg_button.clicked.connect(lambda: self.convert_png_to_jpg(self.folder_path))
-        tag_buttons_layout.addWidget(turn_png_into_jpg_button)
+        convert_to_jpg_button = QPushButton("Convertir tout en JPG")
+        convert_to_jpg_button.clicked.connect(lambda: self.convert_to_jpg(self.folder_path))
+        tag_buttons_layout.addWidget(convert_to_jpg_button)
 
         image_tags_label = QLabel("Tags Associated with Image:")
         image_tags_label.setStyleSheet("font-size: 12px;")
@@ -327,108 +326,142 @@ class ImageCaptioningApp(QMainWindow):
     def send_to_ollama(self):
         image_path = os.path.join(self.folder_path, self.image_files[self.current_index])
     
-        # Construct the command to send to Ollama
-        command = ["ollama", "run", "llava", image_path, self.config["prompt"]]
+        # Utiliser le modèle défini dans la configuration
+        command = ["ollama", "run", self.config["model"], image_path, self.config["prompt"]]
     
         try:
-            # Run the command and capture the output
             if platform.system() == "Windows":
                 result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", creationflags=subprocess.CREATE_NO_WINDOW)
             else:
                 result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", stderr=subprocess.DEVNULL)
         
-            # Check if the command was successful
             if result.returncode == 0:
-                # Extract the output from the result
                 output = result.stdout.strip()
-            
-                # Add the output as tags to the image
                 self.add_tag_to_caption(output)
             else:
-                # Handle errors if the command failed
                 error_message = result.stderr.strip()
                 QMessageBox.critical(self, "Error", f"Ollama returned an error: {error_message}")
     
         except Exception as e:
-            # Handle any unexpected errors
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+
+    def open_settings(self):
+        try:
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Settings")
+            layout = QVBoxLayout(dialog)
+
+            prompt_label = QLabel("Ollama Prompt:")
+            layout.addWidget(prompt_label)
+            prompt_input = QLineEdit(self.config["prompt"])
+            layout.addWidget(prompt_input)
+        
+            model_label = QLabel("Ollama Model:")
+            layout.addWidget(model_label)
+            model_input = QLineEdit(self.config["model"])
+            layout.addWidget(model_input)
+
+            buttons_layout = QHBoxLayout()
+
+            save_button = QPushButton("Save")
+            save_button.clicked.connect(lambda: self.save_settings(prompt_input.text(), model_input.text(), dialog))
+            buttons_layout.addWidget(save_button)
+
+            reset_button = QPushButton("Reset to Default")
+            reset_button.clicked.connect(lambda: self.reset_to_default(prompt_input, model_input))
+            buttons_layout.addWidget(reset_button)
+
+            layout.addLayout(buttons_layout)
+            dialog.exec_()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred while opening settings: {str(e)}")
+            print(f"Error in open_settings: {str(e)}")
+
+    def save_settings(self, new_prompt, new_model, dialog):
+        self.config["prompt"] = new_prompt
+        self.config["model"] = new_model
+        self.save_config()
+        dialog.accept()
+
+    def reset_to_default(self, prompt_input, model_input):
+        default_prompt = "Describe this image as a training prompt, using short, precise terms separated by commas. You'll answer only with these descriptive terms."
+        default_model = "llava"
+        prompt_input.setText(default_prompt)
+        model_input.setText(default_model)
+        self.config["prompt"] = default_prompt
+        self.config["model"] = default_model
+        self.save_config()
+        QMessageBox.information(self, "Reset", "Settings have been reset to default.")
+
+
+    def load_config(self):
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+        else:
+            config = {}
+
+        # Valeurs par défaut
+        default_config = {
+            "prompt": "Describe this image as a training prompt, using short, precise terms separated by commas. You'll answer only with these descriptive terms.",
+            "model": "llava"
+        }
+
+        # Mettre à jour la configuration avec les valeurs par défaut si elles n'existent pas
+        for key, value in default_config.items():
+            if key not in config:
+                config[key] = value
+
+        # Sauvegarder la configuration mise à jour
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=4)
+
+        return config
+
+    def convert_to_jpg(self, input_folder):
+        if not os.path.exists(input_folder):
+            QMessageBox.warning(self, "Error", f"Le dossier {input_folder} n'existe pas.")
+            return
+
+        supported_formats = ('.png', '.webp', '.jpeg', '.gif', '.bmp', '.tiff')
+        files = os.listdir(input_folder)
+        converted_count = 0
+
+        for file in files:
+            if file.lower().endswith(supported_formats):
+                original_path = os.path.join(input_folder, file)
+                try:
+                    with Image.open(original_path) as img:
+                        rgb_img = img.convert('RGB')
+                        base_name = os.path.splitext(file)[0]
+                        jpg_name = base_name + '.jpg'
+                        jpg_path = os.path.join(input_folder, jpg_name)
+
+                        counter = 1
+                        while os.path.exists(jpg_path):
+                            jpg_name = f"{base_name}_{counter}.jpg"
+                            jpg_path = os.path.join(input_folder, jpg_name)
+                            counter += 1
+
+                        rgb_img.save(jpg_path, 'JPEG')
+                        os.remove(original_path)
+                        converted_count += 1
+                except Exception as e:
+                    print(f"Erreur lors de la conversion de {file}: {str(e)}")
+
+        QMessageBox.information(self, "Success", f"{converted_count} images ont été converties en JPG avec succès !")
 
     def save_last_folder(self, folder_path):
         with open(LAST_FOLDER_FILE, 'w') as f:
             json.dump({"last_folder": folder_path}, f)
 
-    def load_config(self):
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, 'r') as f:
-                return json.load(f)
-        return {"prompt": "Describe this image as a training prompt, using short, precise terms separated by commas. You'll answer only with these descriptive terms."}
+    def save_last_folder(self, folder_path):
+        with open(LAST_FOLDER_FILE, 'w') as f:
+            json.dump({"last_folder": folder_path}, f)
+
     def save_config(self):
         with open(CONFIG_FILE, 'w') as f:
             json.dump(self.config, f)
-
-    def open_settings(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Settings")
-        layout = QVBoxLayout(dialog)
-
-        prompt_label = QLabel("Ollama Prompt:")
-        layout.addWidget(prompt_label)
-
-        prompt_input = QLineEdit(self.config["prompt"])
-        layout.addWidget(prompt_input)
-
-        buttons_layout = QHBoxLayout()
-
-        save_button = QPushButton("Save")
-        save_button.clicked.connect(lambda: self.save_prompt(prompt_input.text(), dialog))
-        buttons_layout.addWidget(save_button)
-
-        reset_button = QPushButton("Reset to Default")
-        reset_button.clicked.connect(lambda: self.reset_to_default(prompt_input))
-        buttons_layout.addWidget(reset_button)
-
-        layout.addLayout(buttons_layout)
-
-        dialog.exec_()
-
-    def save_prompt(self, new_prompt, dialog):
-        self.config["prompt"] = new_prompt
-        self.save_config()
-        dialog.accept()
-
-    def reset_to_default(self, prompt_input):
-        default_prompt = "Describe this image as a training prompt, using short, precise terms separated by commas. You'll answer only with these descriptive terms."
-        prompt_input.setText(default_prompt)
-        self.config["prompt"] = default_prompt
-        self.save_config()
-        QMessageBox.information(self, "Reset", "Settings have been reset to default.")
-
-    def convert_png_to_jpg(self, input_folder):
-        if not os.path.exists(input_folder):
-            QMessageBox.warning(self, "Error", f"Le dossier {input_folder} n'existe pas.")
-            return
-
-        files = os.listdir(input_folder)
-        for file in files:
-            if file.lower().endswith('.png'):
-                png_path = os.path.join(input_folder, file)
-                with Image.open(png_path) as img:
-                    rgb_img = img.convert('RGB')
-                    base_name = os.path.splitext(file)[0]
-                    jpg_name = base_name + '.jpg'
-                    jpg_path = os.path.join(input_folder, jpg_name)
-
-                    counter = 1
-                    while os.path.exists(jpg_path):
-                        jpg_name = f"{base_name}_{counter}.jpg"
-                        jpg_path = os.path.join(input_folder, jpg_name)
-                        counter += 1
-
-                    rgb_img.save(jpg_path, 'JPEG')
-                    os.remove(png_path)
-
-        QMessageBox.information(self, "Success", "Tous les PNG ont été convertis en JPG avec succès !")
-
 
 
 if __name__ == "__main__":
