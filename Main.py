@@ -26,8 +26,13 @@ class ImageCaptioningApp(QMainWindow):
         self.hidden_images_file = os.path.join(folder_path, "hidden_images.json")
 
         self.save_last_folder(folder_path)
+
         # Chargez la configuration ici
         self.config = self.load_config()
+
+        # Set the application icon
+        icon_path = os.path.join(SCRIPT_DIR, "icons", "CappAppIcon.ico")
+        self.setWindowIcon(QIcon(icon_path))
 
         # Load hidden images before loading the image list
         self.load_hidden_images()
@@ -167,6 +172,38 @@ class ImageCaptioningApp(QMainWindow):
         settings_button.setToolTip("Settings")  # Ajoute une infobulle
         settings_button.clicked.connect(self.open_settings)
         bottom_layout.addWidget(settings_button)
+
+    def open_settings(self):
+        try:
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Settings")
+            layout = QVBoxLayout(dialog)
+
+            prompt_label = QLabel("Ollama Prompt:")
+            layout.addWidget(prompt_label)
+            prompt_input = QLineEdit(self.config["prompt"])
+            layout.addWidget(prompt_input)
+        
+            model_label = QLabel("Ollama Model:")
+            layout.addWidget(model_label)
+            model_input = QLineEdit(self.config["model"])
+            layout.addWidget(model_input)
+
+            buttons_layout = QHBoxLayout()
+
+            save_button = QPushButton("Save")
+            save_button.clicked.connect(lambda: self.save_settings(prompt_input.text(), model_input.text(), dialog))
+            buttons_layout.addWidget(save_button)
+
+            reset_button = QPushButton("Reset to Default")
+            reset_button.clicked.connect(lambda: self.reset_to_default(prompt_input, model_input))
+            buttons_layout.addWidget(reset_button)
+
+            layout.addLayout(buttons_layout)
+            dialog.exec_()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred while opening settings: {str(e)}")
+            print(f"Error in open_settings: {str(e)}")
 
     def load_image(self):
         image_path = os.path.join(self.folder_path, self.image_files[self.current_index])
@@ -345,38 +382,6 @@ class ImageCaptioningApp(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
-    def open_settings(self):
-        try:
-            dialog = QDialog(self)
-            dialog.setWindowTitle("Settings")
-            layout = QVBoxLayout(dialog)
-
-            prompt_label = QLabel("Ollama Prompt:")
-            layout.addWidget(prompt_label)
-            prompt_input = QLineEdit(self.config["prompt"])
-            layout.addWidget(prompt_input)
-        
-            model_label = QLabel("Ollama Model:")
-            layout.addWidget(model_label)
-            model_input = QLineEdit(self.config["model"])
-            layout.addWidget(model_input)
-
-            buttons_layout = QHBoxLayout()
-
-            save_button = QPushButton("Save")
-            save_button.clicked.connect(lambda: self.save_settings(prompt_input.text(), model_input.text(), dialog))
-            buttons_layout.addWidget(save_button)
-
-            reset_button = QPushButton("Reset to Default")
-            reset_button.clicked.connect(lambda: self.reset_to_default(prompt_input, model_input))
-            buttons_layout.addWidget(reset_button)
-
-            layout.addLayout(buttons_layout)
-            dialog.exec_()
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"An error occurred while opening settings: {str(e)}")
-            print(f"Error in open_settings: {str(e)}")
-
     def save_settings(self, new_prompt, new_model, dialog):
         self.config["prompt"] = new_prompt
         self.config["model"] = new_model
@@ -466,6 +471,10 @@ class ImageCaptioningApp(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+
+    # Set the application icon for the taskbar
+    app_icon = QIcon(os.path.join(SCRIPT_DIR, "icons", "CappAppIcon.ico"))
+    app.setWindowIcon(app_icon)
 
     # Fonction pour charger le dernier dossier utilisé
     def load_last_folder():
