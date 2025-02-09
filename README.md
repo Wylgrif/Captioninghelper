@@ -10,4 +10,4 @@ Then you need python with this library to run this code
 pip install pillow pyqt5
 ```
 Run Main .py to use this programm.
-You must have Ollama with Lava to use the autocaptioning feature.
+You must have Ollama with Lava(or another vision llm) to use the autocaptioning feature.
