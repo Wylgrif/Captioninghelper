@@ -1,4 +1,5 @@
 This project is a small script designed to help manual captioning of an image database. It requires python and Pillow if you use source code.
+![Software Screenshot](./example/Example.png)
 
 ## Installation
 First, clone this repo
