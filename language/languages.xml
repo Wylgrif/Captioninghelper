@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<languages>
+  <language name="English">
+    <string name="window_title">Image Captioning Application</string>
+    <string name="tag_library_label">Tag Library:</string>
+    <string name="add_tag_button">Add Tag</string>
+    <string name="remove_tag_button">Remove Tag</string>
+    <string name="convert_to_jpg_button">Convert All to JPG</string>
+    <string name="image_tags_label">Tags Associated with Image:</string>
+    <string name="prev_button">Previous Image</string>
+    <string name="next_button">Next Image</string>
+    <string name="random_button">Random Image</string>
+    <string name="apply_tag_button">Apply Tag</string>
+    <string name="add_temp_tag_button">Add Tag (Temporary)</string>
+    <string name="remove_tag_button">Remove Tag</string>
+    <string name="hide_image_button">Hide Image</string>
+    <string name="send_to_ollama_button">Send to Ollama</string>
+    <string name="settings_button_tooltip">Settings</string>
+    <string name="settings_dialog_title">Settings</string>
+    <string name="ollama_prompt_label">Ollama Prompt:</string>
+    <string name="ollama_model_label">Ollama Model:</string>
+    <string name="save_button">Save</string>
+    <string name="reset_button">Reset to Default</string>
+    <string name="language_label">Language:</string>
+  </language>
+  <language name="Français">
+    <string name="window_title">Application de Légende d'Images</string>
+    <string name="tag_library_label">Bibliothèque de Tags :</string>
+    <string name="add_tag_button">Ajouter Tag</string>
+    <string name="remove_tag_button">Supprimer Tag</string>
+    <string name="convert_to_jpg_button">Convertir Tout en JPG</string>
+    <string name="image_tags_label">Tags Associés à l'Image :</string>
+    <string name="prev_button">Image Précédente</string>
+    <string name="next_button">Image Suivante</string>
+    <string name="random_button">Image Aléatoire</string>
+    <string name="apply_tag_button">Appliquer Tag</string>
+    <string name="add_temp_tag_button">Ajouter Tag (Temporaire)</string>
+    <string name="remove_tag_button">Supprimer Tag</string>
+    <string name="hide_image_button">Masquer Image</string>
+    <string name="send_to_ollama_button">Envoyer à Ollama</string>
+    <string name="settings_button_tooltip">Paramètres</string>
+    <string name="settings_dialog_title">Paramètres</string>
+    <string name="ollama_prompt_label">Prompt Ollama :</string>
+    <string name="ollama_model_label">Modèle Ollama :</string>
+    <string name="save_button">Enregistrer</string>
+    <string name="reset_button">Réinitialiser</string>
+    <string name="language_label">Langue :</string>
+  </language>
+</languages>
