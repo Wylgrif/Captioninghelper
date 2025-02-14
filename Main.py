@@ -1,211 +1,305 @@
 import os
 import json
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QListWidget, QTextEdit, QInputDialog, QMessageBox, QFileDialog, QProgressBar, QDialog, QLineEdit
-from PyQt5.QtGui import QPixmap, QIcon
-from PyQt5.QtCore import Qt, QSize
-from PIL import Image
+import xml.etree.ElementTree as ET
 import subprocess
 import random
 import platform
 
-# Ajoutez ces constantes au début du fichier, juste après les imports
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout,
+    QWidget, QPushButton, QListWidget, QTextEdit, QInputDialog,
+    QMessageBox, QFileDialog, QProgressBar, QDialog, QLineEdit,
+    QComboBox
+)
+from PyQt5.QtGui import QPixmap, QIcon
+from PyQt5.QtCore import Qt, QSize
+from PIL import Image
+
+# Constantes de chemin
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LAST_FOLDER_FILE = os.path.join(SCRIPT_DIR, "last_folder.json")
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
+LANGUAGE_FILE = os.path.join(SCRIPT_DIR, "language", "languages.xml")
 
 
 class ImageCaptioningApp(QMainWindow):
     def __init__(self, folder_path):
         super().__init__()
+
+        # Mémorise le dossier d'images
         self.folder_path = folder_path
-        self.tag_library = set()
-        self.hidden_images = set()
 
-        self.tag_library_file = os.path.join(folder_path, "tag_library.json")
-        self.hidden_images_file = os.path.join(folder_path, "hidden_images.json")
-
-        self.save_last_folder(folder_path)
-
-        # Chargez la configuration ici
-        self.config = self.load_config()
-
-        # Set the application icon
+        # Prépare l'iconographie
         icon_path = os.path.join(SCRIPT_DIR, "icons", "CappAppIcon.ico")
         self.setWindowIcon(QIcon(icon_path))
 
-        # Load hidden images before loading the image list
-        self.load_hidden_images()
+        # Gère les fichiers (tags, images cachées) et la config
+        self.tag_library_file = os.path.join(folder_path, "tag_library.json")
+        self.hidden_images_file = os.path.join(folder_path, "hidden_images.json")
+        self.save_last_folder(folder_path)
+        self.config = self.load_config()
 
-        # Load only non-hidden images
-        self.image_files = [
-            f for f in os.listdir(folder_path)
-            if os.path.isfile(os.path.join(folder_path, f))
-            and f.lower().endswith(('png', 'jpg', 'jpeg'))
-            and f not in self.hidden_images  # Exclude hidden images
-        ]
+        # Charge la gestion multilingue
+        self.load_languages()
 
+        # Pré-initialise d'éventuels attributs
+        self.tag_library = set()
+        self.hidden_images = set()
+        self.image_files = []
         self.current_index = 0
 
+        # Construit l'UI en premier
         self.setup_ui()
 
+        # Sélectionne la langue (ré-étiquette l'UI) - possible APRES setup_ui()
+        self.set_language(self.config.get('language', 'English'))
+
+        # Charge les images cachées et la liste d'images
+        self.load_hidden_images()
+        self.load_image_list()
+
+        # Charge la bibliothèque de tags
         self.load_tag_library()
 
+        # S'il y a des images, on affiche la première
         if self.image_files:
             self.load_image()
             self.update_progress_bar()
         else:
             QMessageBox.critical(self, "Error", "No images found in the specified folder.")
 
+
     def setup_ui(self):
-        self.setWindowTitle("Image Captioning Application")
-        self.setGeometry(100, 100, 800, 600)
+        """
+        Construit l'interface utilisateur et définit tous les widgets
+        """
+        try:
+            self.setWindowTitle("Image Captioning Application")
+            self.setGeometry(100, 100, 800, 600)
 
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
+            # Zone centrale
+            central_widget = QWidget()
+            self.setCentralWidget(central_widget)
+            main_layout = QVBoxLayout(central_widget)
 
-        image_container = QWidget()
-        image_layout = QVBoxLayout(image_container)
-        image_layout.setAlignment(Qt.AlignCenter)  # Centrer le contenu
+            # Conteneur pour l'image
+            image_container = QWidget()
+            image_layout = QVBoxLayout(image_container)
+            image_layout.setAlignment(Qt.AlignCenter)
 
-        self.image_label = QLabel()
-        self.image_label.setAlignment(Qt.AlignCenter)  # Centrer l'image
-        image_layout.addWidget(self.image_label)
+            self.image_label = QLabel()
+            self.image_label.setAlignment(Qt.AlignCenter)
+            self.image_label.setObjectName("image_label")
+            image_layout.addWidget(self.image_label)
 
-        self.image_name_label = QLabel()
-        self.image_name_label.setStyleSheet("font-size: 16px;")
-        self.image_name_label.setAlignment(Qt.AlignCenter)  # Centrer le nom de l'image
-        image_layout.addWidget(self.image_name_label)
+            self.image_name_label = QLabel()
+            self.image_name_label.setStyleSheet("font-size: 16px;")
+            self.image_name_label.setAlignment(Qt.AlignCenter)
+            self.image_name_label.setObjectName("image_name_label")
+            image_layout.addWidget(self.image_name_label)
 
-        main_layout.addWidget(image_container)
+            main_layout.addWidget(image_container)
 
-        tag_library_layout = QHBoxLayout()
-        main_layout.addLayout(tag_library_layout)
+            # Bloc : Tag library
+            tag_library_layout = QHBoxLayout()
+            main_layout.addLayout(tag_library_layout)
 
-        tag_library_label = QLabel("Tag Library:")
-        tag_library_label.setStyleSheet("font-size: 12px;")
-        tag_library_layout.addWidget(tag_library_label)
+            tag_library_label = QLabel("Tag Library:")
+            tag_library_label.setObjectName("tag_library_label")
+            tag_library_label.setStyleSheet("font-size: 12px;")
+            tag_library_layout.addWidget(tag_library_label)
 
-        self.tags_listbox = QListWidget()
-        self.tags_listbox.setFixedHeight(120)
-        tag_library_layout.addWidget(self.tags_listbox)
+            self.tags_listbox = QListWidget()
+            self.tags_listbox.setObjectName("tags_listbox")
+            self.tags_listbox.setFixedHeight(120)
+            tag_library_layout.addWidget(self.tags_listbox)
 
-        tag_buttons_layout = QVBoxLayout()
-        tag_library_layout.addLayout(tag_buttons_layout)
+            # Boutons d'action sur la Tag library
+            tag_buttons_layout = QVBoxLayout()
+            tag_library_layout.addLayout(tag_buttons_layout)
 
-        add_tag_button = QPushButton("Add Tag")
-        add_tag_button.clicked.connect(self.add_to_library)
-        tag_buttons_layout.addWidget(add_tag_button)
+            add_tag_button = QPushButton("Add Tag")
+            add_tag_button.setObjectName("add_tag_button")
+            add_tag_button.clicked.connect(self.add_to_library)
+            tag_buttons_layout.addWidget(add_tag_button)
 
-        remove_tag_button = QPushButton("Remove Tag")
-        remove_tag_button.clicked.connect(self.remove_from_library)
-        tag_buttons_layout.addWidget(remove_tag_button)
+            remove_tag_button = QPushButton("Remove Tag")
+            remove_tag_button.setObjectName("remove_tag_button")
+            remove_tag_button.clicked.connect(self.remove_from_library)
+            tag_buttons_layout.addWidget(remove_tag_button)
 
-        convert_to_jpg_button = QPushButton("Convertir tout en JPG")
-        convert_to_jpg_button.clicked.connect(lambda: self.convert_to_jpg(self.folder_path))
-        tag_buttons_layout.addWidget(convert_to_jpg_button)
+            convert_to_jpg_button = QPushButton("Convertir tout en JPG")
+            convert_to_jpg_button.setObjectName("convert_to_jpg_button")
+            convert_to_jpg_button.clicked.connect(lambda: self.convert_to_jpg(self.folder_path))
+            tag_buttons_layout.addWidget(convert_to_jpg_button)
 
-        image_tags_label = QLabel("Tags Associated with Image:")
-        image_tags_label.setStyleSheet("font-size: 12px;")
-        image_tags_label.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(image_tags_label)
+            # Label pour les tags d'une image
+            image_tags_label = QLabel("Tags Associated with Image:")
+            image_tags_label.setObjectName("image_tags_label")
+            image_tags_label.setStyleSheet("font-size: 12px;")
+            image_tags_label.setAlignment(Qt.AlignCenter)
+            main_layout.addWidget(image_tags_label)
 
-        self.image_tags_display = QTextEdit()
-        self.image_tags_display.setFixedHeight(60)
-        main_layout.addWidget(self.image_tags_display)
+            # Zone de texte pour les tags liés à l'image en cours
+            self.image_tags_display = QTextEdit()
+            self.image_tags_display.setFixedHeight(60)
+            self.image_tags_display.setObjectName("image_tags_display")
+            main_layout.addWidget(self.image_tags_display)
 
-        actions_layout = QHBoxLayout()
-        main_layout.addLayout(actions_layout)
+            # Bloc de boutons sous l'éditeur
+            actions_layout = QHBoxLayout()
+            main_layout.addLayout(actions_layout)
 
-        prev_button = QPushButton("Previous Image")
-        prev_button.clicked.connect(self.prev_image)
-        actions_layout.addWidget(prev_button)
+            prev_button = QPushButton("Previous Image")
+            prev_button.setObjectName("prev_button")
+            prev_button.clicked.connect(self.prev_image)
+            actions_layout.addWidget(prev_button)
 
-        next_button = QPushButton("Next Image")
-        next_button.clicked.connect(self.next_image)
-        actions_layout.addWidget(next_button)
+            next_button = QPushButton("Next Image")
+            next_button.setObjectName("next_button")
+            next_button.clicked.connect(self.next_image)
+            actions_layout.addWidget(next_button)
 
-        random_button = QPushButton("Random Image")
-        random_button.clicked.connect(self.random_image)
-        actions_layout.addWidget(random_button)
+            random_button = QPushButton("Random Image")
+            random_button.setObjectName("random_button")
+            random_button.clicked.connect(self.random_image)
+            actions_layout.addWidget(random_button)
 
-        apply_tag_button = QPushButton("Apply Tag")
-        apply_tag_button.clicked.connect(self.apply_tag)
-        actions_layout.addWidget(apply_tag_button)
+            apply_tag_button = QPushButton("Apply Tag")
+            apply_tag_button.setObjectName("apply_tag_button")
+            apply_tag_button.clicked.connect(self.apply_tag)
+            actions_layout.addWidget(apply_tag_button)
 
-        add_temp_tag_button = QPushButton("Add Tag (Temporary)")
-        add_temp_tag_button.clicked.connect(self.add_temp_tag)
-        actions_layout.addWidget(add_temp_tag_button)
+            add_temp_tag_button = QPushButton("Add Tag (Temporary)")
+            add_temp_tag_button.setObjectName("add_temp_tag_button")
+            add_temp_tag_button.clicked.connect(self.add_temp_tag)
+            actions_layout.addWidget(add_temp_tag_button)
 
-        remove_tag_button = QPushButton("Remove Tag")
-        remove_tag_button.clicked.connect(self.remove_tag)
-        actions_layout.addWidget(remove_tag_button)
+            remove_tag_button = QPushButton("Remove Tag")
+            remove_tag_button.setObjectName("remove_tag_button")
+            remove_tag_button.clicked.connect(self.remove_tag)
+            actions_layout.addWidget(remove_tag_button)
 
-        hide_image_button = QPushButton("Hide Image")
-        hide_image_button.clicked.connect(self.hide_image)
-        actions_layout.addWidget(hide_image_button)
+            hide_image_button = QPushButton("Hide Image")
+            hide_image_button.setObjectName("hide_image_button")
+            hide_image_button.clicked.connect(self.hide_image)
+            actions_layout.addWidget(hide_image_button)
 
-        send_to_ollama_button = QPushButton("Send to Ollama")
-        send_to_ollama_button.clicked.connect(self.send_to_ollama)
-        actions_layout.addWidget(send_to_ollama_button)
+            send_to_ollama_button = QPushButton("Send to Ollama")
+            send_to_ollama_button.setObjectName("send_to_ollama_button")
+            send_to_ollama_button.clicked.connect(self.send_to_ollama)
+            actions_layout.addWidget(send_to_ollama_button)
 
-        self.progress_label = QLabel()
-        self.progress_label.setStyleSheet("font-size: 12px;")
-        self.progress_label.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(self.progress_label)
+            # Label de progression
+            self.progress_label = QLabel()
+            self.progress_label.setStyleSheet("font-size: 12px;")
+            self.progress_label.setAlignment(Qt.AlignCenter)
+            self.progress_label.setObjectName("progress_label")
+            main_layout.addWidget(self.progress_label)
 
-        self.progress_bar = QProgressBar()
-        main_layout.addWidget(self.progress_bar)
+            # Barre de progression
+            self.progress_bar = QProgressBar()
+            self.progress_bar.setObjectName("progress_bar")
+            main_layout.addWidget(self.progress_bar)
 
+            # Bloc du bas
+            bottom_layout = QHBoxLayout()
+            main_layout.addLayout(bottom_layout)
+            bottom_layout.addStretch()
 
-        bottom_layout = QHBoxLayout()
-        main_layout.addLayout(bottom_layout)
+            settings_button = QPushButton()
+            settings_button.setObjectName("settings_button")
+            settings_button.setToolTip("Settings")
+            icon_settings = os.path.join(SCRIPT_DIR, "icons", "settings.png")
+            if os.path.exists(icon_settings):
+                settings_button.setIcon(QIcon(icon_settings))
+            settings_button.setIconSize(QSize(32, 32))
+            settings_button.setFixedSize(40, 40)
+            settings_button.clicked.connect(self.open_settings)
+            bottom_layout.addWidget(settings_button)
 
-        bottom_layout.addStretch()
+        except Exception as e:
+            print(f"Error in setup_ui: {str(e)}")
+            QMessageBox.critical(self, "Error", f"An error occurred while setting up the UI: {str(e)}")
 
-        settings_button = QPushButton()
-        icon_path = os.path.join(SCRIPT_DIR, "icons", "settings.png")
-        settings_button.setIcon(QIcon(icon_path))
-        settings_button.setIconSize(QSize(32, 32))  # Ajustez la taille selon vos besoins
-        settings_button.setFixedSize(40, 40)
-        settings_button.setToolTip("Settings")  # Ajoute une infobulle
-        settings_button.clicked.connect(self.open_settings)
-        bottom_layout.addWidget(settings_button)
 
     def open_settings(self):
+        """
+        Ouvre la boîte de dialogue des paramètres
+        """
         try:
             dialog = QDialog(self)
-            dialog.setWindowTitle("Settings")
+            dialog.setWindowTitle(self.current_language.get("settings_dialog_title", "Settings"))
             layout = QVBoxLayout(dialog)
 
-            prompt_label = QLabel("Ollama Prompt:")
+            # Prompt
+            prompt_label = QLabel(self.current_language.get("ollama_prompt_label", "Ollama Prompt:"))
             layout.addWidget(prompt_label)
-            prompt_input = QLineEdit(self.config["prompt"])
+            prompt_input = QLineEdit(self.config.get("prompt", ""))
             layout.addWidget(prompt_input)
-        
-            model_label = QLabel("Ollama Model:")
+
+            # Modèle
+            model_label = QLabel(self.current_language.get("ollama_model_label", "Ollama Model:"))
             layout.addWidget(model_label)
-            model_input = QLineEdit(self.config["model"])
+            model_input = QLineEdit(self.config.get("model", ""))
             layout.addWidget(model_input)
 
-            buttons_layout = QHBoxLayout()
+            # Choix de la langue
+            language_label = QLabel(self.current_language.get("language_label", "Language:"))
+            layout.addWidget(language_label)
+            language_combo = QComboBox()
+            # Alimente la liste des langues depuis self.languages
+            language_combo.addItems(self.languages.keys())
+            language_combo.setCurrentText(self.config.get('language', 'English'))
+            layout.addWidget(language_combo)
 
-            save_button = QPushButton("Save")
-            save_button.clicked.connect(lambda: self.save_settings(prompt_input.text(), model_input.text(), dialog))
+            # Boutons (Sauver / Réinitialiser)
+            buttons_layout = QHBoxLayout()
+            save_button = QPushButton(self.current_language.get("save_button", "Save"))
+            save_button.clicked.connect(lambda: self.save_settings(
+                prompt_input.text(),
+                model_input.text(),
+                language_combo.currentText(),
+                dialog
+            ))
             buttons_layout.addWidget(save_button)
 
-            reset_button = QPushButton("Reset to Default")
-            reset_button.clicked.connect(lambda: self.reset_to_default(prompt_input, model_input))
+            reset_button = QPushButton(self.current_language.get("reset_button", "Reset to Default"))
+            reset_button.clicked.connect(lambda: self.reset_to_default(prompt_input, model_input, language_combo))
             buttons_layout.addWidget(reset_button)
 
             layout.addLayout(buttons_layout)
+
             dialog.exec_()
+
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred while opening settings: {str(e)}")
             print(f"Error in open_settings: {str(e)}")
 
+
+    # ======================
+    #  FONCTIONS DE L'UI
+    # ======================
+
+    def load_image_list(self):
+        """
+        Charge la liste des images en excluant les images cachées
+        """
+        files = os.listdir(self.folder_path)
+        self.image_files = [
+            f for f in files
+            if os.path.isfile(os.path.join(self.folder_path, f))
+            and f.lower().endswith(('png', 'jpg', 'jpeg'))
+            and f not in self.hidden_images
+        ]
+
     def load_image(self):
+        """
+        Charge l'image courante dans le QLabel
+        """
+        if not self.image_files:
+            return
         image_path = os.path.join(self.folder_path, self.image_files[self.current_index])
         image = Image.open(image_path)
         image.thumbnail((600, 400))
@@ -218,6 +312,9 @@ class ImageCaptioningApp(QMainWindow):
         self.load_tags()
 
     def load_tags(self):
+        """
+        Charge les tags d'une image .txt
+        """
         image_name = os.path.splitext(self.image_files[self.current_index])[0]
         tags_file = os.path.join(self.folder_path, f"{image_name}.txt")
 
@@ -231,7 +328,12 @@ class ImageCaptioningApp(QMainWindow):
             self.image_tags_display.setText(", ".join(tags))
 
     def save_tags(self):
-        # Don't save tags for hidden images
+        """
+        Sauvegarde les tags liés à l'image courante
+        """
+        if not self.image_files:
+            return
+        # Ne pas sauvegarder si l'image est cachée
         if self.image_files[self.current_index] in self.hidden_images:
             return
 
@@ -245,30 +347,41 @@ class ImageCaptioningApp(QMainWindow):
             f.write(", ".join(tags))
         self.update_progress_bar()
 
+
     def update_progress_bar(self):
-        file_list = os.listdir(self.folder_path)
-        txt_files = len([
-            f for f in file_list
-            if f.endswith(".txt")
-        ])
+        """
+        Met à jour la barre de progression en comptant les .txt vs images
+        """
+        all_files = os.listdir(self.folder_path)
+        txt_files = len([f for f in all_files if f.endswith(".txt")])
         total_images = len(self.image_files) + len(self.hidden_images)
 
-        progress = (txt_files / total_images) if total_images > 0 else 0
-        self.progress_bar.setValue(int(progress * 100))
+        if total_images > 0:
+            progress = (txt_files / total_images) * 100
+        else:
+            progress = 0
 
+        self.progress_bar.setValue(int(progress))
         self.progress_label.setText(f"Progress: {txt_files} / {total_images} images captioned")
+
+
+    # ======================
+    #  FONCTIONS DE TAG
+    # ======================
 
     def add_to_library(self):
         new_tag, ok = QInputDialog.getText(self, "Add Tag", "Enter a new tag:")
         if ok and new_tag and new_tag not in self.tag_library:
             self.tag_library.add(new_tag)
             self.update_tag_library()
+            self.save_tag_library()
 
     def remove_from_library(self):
         selected_tag = self.tags_listbox.currentItem()
         if selected_tag and selected_tag.text() in self.tag_library:
             self.tag_library.remove(selected_tag.text())
             self.update_tag_library()
+            self.save_tag_library()
 
     def save_tag_library(self):
         with open(self.tag_library_file, "w", encoding="utf-8") as f:
@@ -279,7 +392,7 @@ class ImageCaptioningApp(QMainWindow):
         if os.path.exists(self.tag_library_file):
             with open(self.tag_library_file, "r", encoding="utf-8") as f:
                 self.tag_library = set(json.load(f))
-            self.update_tag_library()
+        self.update_tag_library()
 
     def update_tag_library(self):
         self.tags_listbox.clear()
@@ -307,15 +420,16 @@ class ImageCaptioningApp(QMainWindow):
             self.add_tag_to_caption(new_tag)
 
     def add_tag_to_caption(self, new_tag):
-        if new_tag:
-            tags_text = self.image_tags_display.toPlainText().strip()
-            tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()]
+        if not new_tag:
+            return
+        tags_text = self.image_tags_display.toPlainText().strip()
+        tags = [tag.strip() for tag in tags_text.split(",") if tag.strip()]
 
-            if new_tag not in tags:
-                tags.append(new_tag)
+        if new_tag not in tags:
+            tags.append(new_tag)
 
-            self.image_tags_display.setText(", ".join(tags))
-            self.save_tags()
+        self.image_tags_display.setText(", ".join(tags))
+        self.save_tags()
 
     def remove_tag(self):
         tags_text = self.image_tags_display.toPlainText().strip()
@@ -329,6 +443,10 @@ class ImageCaptioningApp(QMainWindow):
             self.image_tags_display.setText(", ".join(tags))
             self.save_tags()
 
+    # ======================
+    #  FONCTIONS DE NAVIGATION
+    # ======================
+
     def prev_image(self):
         if self.current_index > 0:
             self.current_index -= 1
@@ -339,13 +457,34 @@ class ImageCaptioningApp(QMainWindow):
             self.current_index += 1
             self.load_image()
 
+    def random_image(self):
+        if not self.image_files:
+            return
+        self.current_index = random.randint(0, len(self.image_files) - 1)
+        self.load_image()
+
+    # ======================
+    #  FONCTIONS HIDE
+    # ======================
+
     def hide_image(self):
+        if not self.image_files:
+            return
         current_image = self.image_files[self.current_index]
         if current_image not in self.hidden_images:
             self.hidden_images.add(current_image)
             self.save_hidden_images()
             QMessageBox.information(self, "Success", f"The image {current_image} has been hidden.")
-            self.next_image()
+            # Après le masquage, on passe à l'image suivante
+            self.load_image_list()
+            if self.current_index >= len(self.image_files):
+                self.current_index = 0
+            if self.image_files:
+                self.load_image()
+            else:
+                QMessageBox.information(self, "Info", "No more images to show.")
+        else:
+            QMessageBox.information(self, "Info", "Image already hidden.")
 
     def save_hidden_images(self):
         with open(self.hidden_images_file, "w", encoding="utf-8") as f:
@@ -356,69 +495,114 @@ class ImageCaptioningApp(QMainWindow):
             with open(self.hidden_images_file, "r", encoding="utf-8") as f:
                 self.hidden_images = set(json.load(f))
 
-    def random_image(self):
-        self.current_index = random.randint(0, len(self.image_files) - 1)
-        self.load_image()
+    # ======================
+    #  FONCTIONS OLLAMA
+    # ======================
 
     def send_to_ollama(self):
+        """
+        Envoie l'image courante à Ollama pour analyse / génération de tags
+        """
+        if not self.image_files:
+            return
+
         image_path = os.path.join(self.folder_path, self.image_files[self.current_index])
-    
-        # Utiliser le modèle défini dans la configuration
+
         command = ["ollama", "run", self.config["model"], image_path, self.config["prompt"]]
-    
+
         try:
             if platform.system() == "Windows":
-                result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", creationflags=subprocess.CREATE_NO_WINDOW)
+                # Sous Windows, pour ne pas ouvrir de console
+                result = subprocess.run(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
             else:
-                result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", stderr=subprocess.DEVNULL)
-        
+                # Sous Linux/Mac, rediriger stderr vers /dev/null
+                result = subprocess.run(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    stderr=subprocess.DEVNULL
+                )
+
             if result.returncode == 0:
                 output = result.stdout.strip()
                 self.add_tag_to_caption(output)
             else:
                 error_message = result.stderr.strip()
                 QMessageBox.critical(self, "Error", f"Ollama returned an error: {error_message}")
-    
+
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
-    def save_settings(self, new_prompt, new_model, dialog):
+
+    # ======================
+    #  FONCTIONS SETTINGS
+    # ======================
+
+    def save_settings(self, new_prompt, new_model, new_language, dialog):
+        """
+        Sauvegarde les paramètres entrés dans la dialog
+        """
         self.config["prompt"] = new_prompt
         self.config["model"] = new_model
+        self.config["language"] = new_language
         self.save_config()
+        self.set_language(new_language)
         dialog.accept()
 
-    def reset_to_default(self, prompt_input, model_input):
-        default_prompt = "Describe this image as a training prompt, using short, precise terms separated by commas. You'll answer only with these descriptive terms."
+    def reset_to_default(self, prompt_input, model_input, language_combo):
+        """
+        Réinitialise les paramètres aux valeurs par défaut
+        """
+        default_prompt = ("Describe this image as a training prompt, using short, "
+                          "precise terms separated by commas. You'll answer only "
+                          "with these descriptive terms.")
         default_model = "llava"
+        default_language = "English"
+
         prompt_input.setText(default_prompt)
         model_input.setText(default_model)
+        language_combo.setCurrentText(default_language)
+
         self.config["prompt"] = default_prompt
         self.config["model"] = default_model
+        self.config["language"] = default_language
         self.save_config()
+        self.set_language(default_language)
         QMessageBox.information(self, "Reset", "Settings have been reset to default.")
 
 
+    # ======================
+    #  FONCTIONS FICHIERS / CONFIG
+    # ======================
+
     def load_config(self):
         if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, 'r') as f:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 config = json.load(f)
         else:
             config = {}
 
         # Valeurs par défaut
         default_config = {
-            "prompt": "Describe this image as a training prompt, using short, precise terms separated by commas. You'll answer only with these descriptive terms.",
+            "prompt": ("Describe this image as a training prompt, using short, "
+                       "precise terms separated by commas. You'll answer only "
+                       "with these descriptive terms."),
             "model": "llava"
         }
 
-        # Mettre à jour la configuration avec les valeurs par défaut si elles n'existent pas
         for key, value in default_config.items():
             if key not in config:
                 config[key] = value
 
-        # Sauvegarder la configuration mise à jour
-        with open(CONFIG_FILE, 'w') as f:
+        # Sauvegarde la config potentiellement mise à jour
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=4)
 
         return config
@@ -443,6 +627,7 @@ class ImageCaptioningApp(QMainWindow):
                         jpg_path = os.path.join(input_folder, jpg_name)
 
                         counter = 1
+                        # S'assure de ne pas écraser un .jpg existant
                         while os.path.exists(jpg_path):
                             jpg_name = f"{base_name}_{counter}.jpg"
                             jpg_path = os.path.join(input_folder, jpg_name)
@@ -456,38 +641,143 @@ class ImageCaptioningApp(QMainWindow):
 
         QMessageBox.information(self, "Success", f"{converted_count} images ont été converties en JPG avec succès !")
 
-    def save_last_folder(self, folder_path):
-        with open(LAST_FOLDER_FILE, 'w') as f:
-            json.dump({"last_folder": folder_path}, f)
 
     def save_last_folder(self, folder_path):
-        with open(LAST_FOLDER_FILE, 'w') as f:
+        """
+        Sauvegarde le dernier dossier utilisé
+        """
+        with open(LAST_FOLDER_FILE, 'w', encoding='utf-8') as f:
             json.dump({"last_folder": folder_path}, f)
+
 
     def save_config(self):
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(self.config, f)
+        """
+        Sauvegarde la config (prompt, model, language...) dans le fichier config.json
+        """
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(self.config, f, indent=4)
+
+    def load_languages(self):
+        """
+        Charge le fichier languages.xml dans self.languages
+        """
+        self.languages = {}
+        if os.path.exists(LANGUAGE_FILE):
+            tree = ET.parse(LANGUAGE_FILE)
+            root = tree.getroot()
+            for lang in root.findall('language'):
+                lang_name = lang.get('name')
+                self.languages[lang_name] = {}
+                for string in lang.findall('string'):
+                    self.languages[lang_name][string.get('name')] = string.text
+        else:
+            print("Warning: No languages.xml found")
+
+    def set_language(self, lang_name):
+        """
+        Sélectionne la langue et rafraîchit l'UI
+        """
+        if lang_name in self.languages:
+            self.current_language = self.languages[lang_name]
+        else:
+            self.current_language = self.languages.get('English', {})
+        self.retranslate_ui()
+
+    def retranslate_ui(self):
+        """
+        Met à jour l'affichage des textes en fonction de la langue courante
+        """
+        # Titre de la fenêtre
+        title = self.current_language.get('window_title', "Image Captioning Application")
+        self.setWindowTitle(title)
+
+        # Mise à jour du label principal "Tag Library"
+        tag_label = self.findChild(QLabel, "tag_library_label")
+        if tag_label:
+            tag_label.setText(self.current_language.get('tag_library_label', "Tag Library:"))
+
+        # Mise à jour du texte de la zone "image_tags_display" — attention, ici on ne veut pas écraser le contenu
+        # s'il s'agit vraiment du texte de l'utilisateur. Généralement, on n'écrase pas l'éditeur en place,
+        # sauf si on veut juste changer le label. Si le label est distinct, on fait autrement.
+        # Ici on va juste modifier la variable s'il n'y a rien dedans, sinon on laisse l'utilisateur.
+        # Néanmoins, pour respecter la logique initiale:
+        image_tags_label_widget = self.findChild(QLabel, "image_tags_label")
+        if image_tags_label_widget:
+            image_tags_label_widget.setText(self.current_language.get('image_tags_label', "Tags Associated with Image:"))
+
+        # Boutons
+        add_tag_btn = self.findChild(QPushButton, "add_tag_button")
+        if add_tag_btn:
+            add_tag_btn.setText(self.current_language.get('add_tag_button', "Add Tag"))
+
+        remove_tag_btn = self.findChild(QPushButton, "remove_tag_button")
+        if remove_tag_btn:
+            remove_tag_btn.setText(self.current_language.get('remove_tag_button', "Remove Tag"))
+
+        convert_jpg_btn = self.findChild(QPushButton, "convert_to_jpg_button")
+        if convert_jpg_btn:
+            convert_jpg_btn.setText(self.current_language.get('convert_to_jpg_button', "Convert All to JPG"))
+
+        settings_btn = self.findChild(QPushButton, "settings_button")
+        if settings_btn:
+            settings_btn.setToolTip(self.current_language.get('settings_button_tooltip', "Settings"))
+
+        progress_label = self.findChild(QLabel, "progress_label")
+        if progress_label:
+            # Indiquer juste un label, ex. "Progress:" ou le texte complet
+            # Pour avoir un label dynamique, on peut paramétrer autrement.
+            progress_label.setText(self.current_language.get('progress_label', "Progress:"))
+
+        # Autres boutons de navigation
+        prev_btn = self.findChild(QPushButton, "prev_button")
+        if prev_btn:
+            prev_btn.setText(self.current_language.get('prev_button', "Previous Image"))
+
+        next_btn = self.findChild(QPushButton, "next_button")
+        if next_btn:
+            next_btn.setText(self.current_language.get('next_button', "Next Image"))
+
+        random_btn = self.findChild(QPushButton, "random_button")
+        if random_btn:
+            random_btn.setText(self.current_language.get('random_button', "Random Image"))
+
+        apply_btn = self.findChild(QPushButton, "apply_tag_button")
+        if apply_btn:
+            apply_btn.setText(self.current_language.get('apply_tag_button', "Apply Tag"))
+
+        add_temp_btn = self.findChild(QPushButton, "add_temp_tag_button")
+        if add_temp_btn:
+            add_temp_btn.setText(self.current_language.get('add_temp_tag_button', "Add Tag (Temporary)"))
+
+        remove_tag_btn2 = self.findChild(QPushButton, "remove_tag_button")
+        if remove_tag_btn2:
+            remove_tag_btn2.setText(self.current_language.get('remove_tag_button', "Remove Tag"))
+
+        hide_image_btn = self.findChild(QPushButton, "hide_image_button")
+        if hide_image_btn:
+            hide_image_btn.setText(self.current_language.get('hide_image_button', "Hide Image"))
+
+        send_ollama_btn = self.findChild(QPushButton, "send_to_ollama_button")
+        if send_ollama_btn:
+            send_ollama_btn.setText(self.current_language.get('send_to_ollama_button', "Send to Ollama"))
 
 
-if __name__ == "__main__":
+def main():
     app = QApplication(sys.argv)
 
-    # Set the application icon for the taskbar
+    # Application icon
     app_icon = QIcon(os.path.join(SCRIPT_DIR, "icons", "CappAppIcon.ico"))
     app.setWindowIcon(app_icon)
 
-    # Fonction pour charger le dernier dossier utilisé
+    # Charge le dernier dossier utilisé
     def load_last_folder():
         if os.path.exists(LAST_FOLDER_FILE):
-            with open(LAST_FOLDER_FILE, 'r') as f:
+            with open(LAST_FOLDER_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 return data.get("last_folder", "")
         return ""
 
-    # Charger le dernier dossier utilisé
     last_folder = load_last_folder()
-
-    # Utiliser le dernier dossier comme point de départ pour la boîte de dialogue
     folder_path = QFileDialog.getExistingDirectory(None, "Select the folder containing images", last_folder)
 
     if folder_path:
@@ -496,3 +786,7 @@ if __name__ == "__main__":
         sys.exit(app.exec_())
     else:
         print("No folder was selected.")
+
+
+if __name__ == "__main__":
+    main()
