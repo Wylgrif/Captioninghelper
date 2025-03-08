@@ -183,6 +183,11 @@ class ImageCaptioningApp(QMainWindow):
             remove_tag_button.clicked.connect(self.remove_tag)
             actions_layout.addWidget(remove_tag_button)
 
+            add_tag_to_all_images = QPushButton("Add Tag To All Images")
+            add_tag_to_all_images.setObjectName("add_tag_to_all_images")
+            add_tag_to_all_images.clicked.connect(self.add_tag_to_all_images)
+            actions_layout.addWidget(add_tag_to_all_images)
+
             hide_image_button = QPushButton("Hide Image")
             hide_image_button.setObjectName("hide_image_button")
             hide_image_button.clicked.connect(self.hide_image)
@@ -467,6 +472,47 @@ class ImageCaptioningApp(QMainWindow):
 
             self.image_tags_display.setText(", ".join(tags))
             self.save_tags()
+
+    def add_tag_to_all_images(self):
+        # Récupère le tag sélectionné dans la liste
+        selected_tag = self.tags_listbox.currentItem()
+        if not selected_tag:
+            error_title = self.current_language.get("error_title", "Error")
+            error_msg = self.current_language.get("select_tag_error", "Please select a tag.")
+            QMessageBox.warning(self, error_title, error_msg)
+            return
+
+        tag_text = selected_tag.text()
+        applied_count = 0
+
+        # Itère sur toutes les images dans self.image_files
+        for image_file in self.image_files:
+            image_name = os.path.splitext(image_file)[0]
+            tags_file = os.path.join(self.folder_path, f"{image_name}.txt")
+            
+            # Charge les tags existants pour cette image
+            if os.path.exists(tags_file):
+                with open(tags_file, "r", encoding="utf-8") as f:
+                    file_tags = [t.strip() for t in f.read().strip().split(",") if t.strip()]
+            else:
+                file_tags = []
+
+            # Si le tag n'est pas déjà présent, l'ajouter
+            if tag_text not in file_tags:
+                file_tags.append(tag_text)
+                with open(tags_file, "w", encoding="utf-8") as f:
+                    f.write(", ".join(file_tags))
+                applied_count += 1
+
+        # Met à jour la barre de progression après modifications
+        self.update_progress_bar()
+        
+        # Affiche un message de succès (vous pouvez paramétrer ce message dans votre fichier de langues)
+        success_title = self.current_language.get("success_title", "Success")
+        success_msg_template = self.current_language.get("add_tag_all_success", "Tag '{tag}' has been applied to {count} images.")
+        success_msg = success_msg_template.format(tag=tag_text, count=applied_count)
+        QMessageBox.information(self, success_title, success_msg)
+
 
     # ======================
     #  FONCTIONS DE NAVIGATION
@@ -804,6 +850,11 @@ class ImageCaptioningApp(QMainWindow):
         remove_tag_btn2 = self.findChild(QPushButton, "remove_tag_button")
         if remove_tag_btn2:
             remove_tag_btn2.setText(self.current_language.get('remove_tag_button', "Remove Tag"))
+
+        add_tag_all_btn = self.findChild(QPushButton, "add_tag_to_all_images")
+        if add_tag_all_btn:
+            add_tag_all_btn.setText(self.current_language.get("add_tag_to_all_images", "Add Tag To All Images"))
+
 
         hide_image_btn = self.findChild(QPushButton, "hide_image_button")
         if hide_image_btn:
