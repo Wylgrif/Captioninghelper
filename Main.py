@@ -10,10 +10,10 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout,
     QWidget, QPushButton, QListWidget, QTextEdit, QInputDialog,
     QMessageBox, QFileDialog, QProgressBar, QDialog, QLineEdit,
-    QComboBox
+    QComboBox, QMenu, QAction
 )
 from PyQt5.QtGui import QPixmap, QIcon
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QUrl
 from PIL import Image
 
 # Constantes de chemin
@@ -90,6 +90,8 @@ class ImageCaptioningApp(QMainWindow):
 
             self.image_label = QLabel()
             self.image_label.setAlignment(Qt.AlignCenter)
+            self.image_label.setContextMenuPolicy(Qt.CustomContextMenu)#
+            self.image_label.customContextMenuRequested.connect(self.show_context_menu)#
             self.image_label.setObjectName("image_label")
             image_layout.addWidget(self.image_label)
 
@@ -277,6 +279,33 @@ class ImageCaptioningApp(QMainWindow):
             QMessageBox.critical(self, "Error", f"An error occurred while opening settings: {str(e)}")
             print(f"Error in open_settings: {str(e)}")
 
+    # Définir la méthode au niveau de la classe, et non imbriquée dans open_settings
+    def show_context_menu(self, position):
+        menu = QMenu()
+        
+        copy_image_text = self.current_language.get("context_copy_image", "Copier l'image")
+        copy_image_action = QAction(copy_image_text, self)
+        copy_image_action.triggered.connect(self.copy_image)
+        menu.addAction(copy_image_action)
+
+        copy_path_text = self.current_language.get("context_copy_path", "Copier le chemin d'accès")
+        copy_path_action = QAction(copy_path_text, self)
+        copy_path_action.triggered.connect(lambda: self.copy_to_clipboard(self.image_path))
+        menu.addAction(copy_path_action)
+
+        open_location_text = self.current_language.get("context_open_file_location", "Ouvrir l'emplacement du fichier")
+        open_location_action = QAction(open_location_text, self)
+        open_location_action.triggered.connect(self.open_file_location)
+        menu.addAction(open_location_action)
+
+        open_app_text = self.current_language.get("context_open_with_default_app", "Ouvrir avec l'application par défaut")
+        open_image_action = QAction(open_app_text, self)
+        open_image_action.triggered.connect(self.open_image_with_default_app)
+        menu.addAction(open_image_action)
+
+        menu.exec_(self.image_label.mapToGlobal(position))
+
+
 
     # ======================
     #  FONCTIONS DE L'UI
@@ -295,20 +324,16 @@ class ImageCaptioningApp(QMainWindow):
         ]
 
     def load_image(self):
-        """
-        Charge l'image courante dans le QLabel
-        """
         if not self.image_files:
             return
         image_path = os.path.join(self.folder_path, self.image_files[self.current_index])
+        self.image_path = image_path  # Stocker le chemin dans l'attribut
         image = Image.open(image_path)
         image.thumbnail((600, 400))
         pixmap = QPixmap(image_path)
         pixmap = pixmap.scaled(600, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-
         self.image_label.setPixmap(pixmap)
         self.image_name_label.setText(os.path.basename(image_path))
-
         self.load_tags()
 
     def load_tags(self):
@@ -656,6 +681,33 @@ class ImageCaptioningApp(QMainWindow):
         """
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(self.config, f, indent=4)
+
+    def copy_image(self):
+        image_path = os.path.join(self.folder_path, self.image_files[self.current_index])
+        # Copy the image to the clipboard
+        pixmap = QPixmap(self.image_path)
+        clipboard = QApplication.clipboard()
+        clipboard.setPixmap(pixmap)
+
+    def copy_to_clipboard(self, text):
+        # Copy text to the clipboard
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+
+    def open_file_location(self):
+        image_path = os.path.join(self.folder_path, self.image_files[self.current_index])
+        folder = os.path.dirname(image_path)
+        if platform.system() == 'Windows':
+            os.startfile(folder)
+        elif platform.system() == 'Darwin':  # macOS
+            subprocess.call(['open', folder])
+        else:  # Linux
+            subprocess.call(['xdg-open', folder])
+
+    def open_image_with_default_app(self):
+        image_path = os.path.join(self.folder_path, self.image_files[self.current_index])
+        # Open the image with the default application
+        os.startfile(self.image_path)
 
     def load_languages(self):
         """
