@@ -379,13 +379,23 @@ class ImageCaptioningApp(QMainWindow):
 
 
     def update_progress_bar(self):
-        """
-        Met à jour la barre de progression en comptant les .txt vs images
-        """
+        # Supprime les fichiers .txt vides
+        for file in os.listdir(self.folder_path):
+            if file.lower().endswith(".txt"):
+                full_path = os.path.join(self.folder_path, file)
+                try:
+                    with open(full_path, "r", encoding="utf-8") as f:
+                        content = f.read().strip()
+                    if not content:  # Si le fichier est vide
+                        os.remove(full_path)
+                except Exception as e:
+                    print(f"Erreur lors de la suppression de {file}: {e}")
+
+        # Après suppression, compte les fichiers .txt et met à jour la barre de progression
         all_files = os.listdir(self.folder_path)
         txt_files = len([f for f in all_files if f.endswith(".txt")])
         total_images = len(self.image_files) + len(self.hidden_images)
-
+        
         if total_images > 0:
             progress = (txt_files / total_images) * 100
         else:
@@ -393,6 +403,7 @@ class ImageCaptioningApp(QMainWindow):
 
         self.progress_bar.setValue(int(progress))
         self.progress_label.setText(f"Progress: {txt_files} / {total_images} images captioned")
+
 
 
     # ======================
