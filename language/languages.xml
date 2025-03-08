@@ -22,6 +22,10 @@
     <string name="save_button">Save</string>
     <string name="reset_button">Reset to Default</string>
     <string name="language_label">Language:</string>
+    <string name="context_copy_image">Copy Image</string>
+    <string name="context_copy_path">Copy File Path</string>
+    <string name="context_open_file_location">Open File Location</string>
+    <string name="context_open_with_default_app">Open with Default Application</string>
   </language>
   <language name="Français">
     <string name="window_title">Application de Légende d'Images</string>
@@ -45,5 +49,9 @@
     <string name="save_button">Enregistrer</string>
     <string name="reset_button">Réinitialiser</string>
     <string name="language_label">Langue :</string>
+    <string name="context_copy_image">Copier l'image</string>
+    <string name="context_copy_path">Copier le chemin d'accès</string>
+    <string name="context_open_file_location">Ouvrir l'emplacement du fichier</string>
+    <string name="context_open_with_default_app">Ouvrir avec l'application par défaut</string>
   </language>
 </languages>
