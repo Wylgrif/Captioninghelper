@@ -1,4 +1,4 @@
 1.Ajouter paramètres:
   - utilisationde de l'api OpenAi pour Auto captionner des images
-3.Ajouter un bouton pour vider les fichiers .txt vides
+  - ajouter une case à cocher pour la suppression des txts vides
 4.Ajouter une animation lors du catptionnage automatique
