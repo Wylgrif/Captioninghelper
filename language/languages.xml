@@ -13,6 +13,7 @@
     <string name="apply_tag_button">Apply Tag</string>
     <string name="add_temp_tag_button">Add Tag (Temporary)</string>
     <string name="remove_tag_button">Remove Tag</string>
+    <string name="add_tag_to_all_images">Add Tag To All Images</string>
     <string name="hide_image_button">Hide Image</string>
     <string name="send_to_ollama_button">Send to Ollama</string>
     <string name="settings_button_tooltip">Settings</string>
@@ -40,6 +41,7 @@
     <string name="apply_tag_button">Appliquer Tag</string>
     <string name="add_temp_tag_button">Ajouter Tag (Temporaire)</string>
     <string name="remove_tag_button">Supprimer Tag</string>
+    <string name="add_tag_to_all_images">Ajouter le tag à toutes les images</string>
     <string name="hide_image_button">Masquer Image</string>
     <string name="send_to_ollama_button">Envoyer à Ollama</string>
     <string name="settings_button_tooltip">Paramètres</string>
