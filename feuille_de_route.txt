@@ -6,3 +6,4 @@
 3.Ajouter un bouton pour vider les fichiers .txt vides
 4.Ajouter une animation lors du catptionnage automatique
     5.menu deoroulant pour 1.copier l'image 2 ouvrir l'image 3 copier le chemin d'acces 4 ouvrir l'emplacament de l'image Edit :done
+6.UN bouton pour ajouter un tag à toutes les photos
