@@ -12,3 +12,9 @@ pip install pillow pyqt5
 ```
 Run Main .py to use this programm.
 You must have Ollama with Lava(or another vision llm) to use the autocaptioning feature.
+
+## Informations
+1.Main.py:
+  Main.py is the app. You can run it and use it. You can change the language with the gear logo (English and French).
+2.Metattxt.py:
+  Metatxt.py is another app which you can use to extract the image prompt generated with Automatic1111. It is in french only for the momment.
